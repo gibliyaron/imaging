@@ -1,0 +1,51 @@
+logging:
+  level: INFO
+  file: etl_process.log
+
+databases:
+  onc_sql:
+    type: mssql
+    server: KorraDBN
+    database: Onc
+    driver: "ODBC Driver 17 for SQL Server"
+
+  hds_img_sql:
+    type: mssql
+    server: KorraDBN
+    database: HDS_IMG
+    driver: "ODBC Driver 17 for SQL Server"
+
+  oracle_prod:
+    type: oracle
+    user: dbread
+    password: "Suff1eld"
+    host: 10.50.16.8
+    port: 1521
+    sid: food
+
+dml:
+  alter_db: ALTER DATABASE SCOPED CONFIGURATION SET MAXDOP = {max_workers};
+
+queries:
+  read_onc: >    
+    SELECT PB_Bdika_Id, Baznat_Id 
+    FROM Onc.dbo.ListBdikaBaznat    
+    EXCEPT
+    SELECT DISTINCT Bdika_Id AS PB_Bdika_Id,Baznat_Id
+    FROM HDS_IMG.dbo.Fact_Imaging_Onc_Banzat_Id_Images_Parallel
+    OPTION (MAXDOP 8);    
+
+  read_oracle: >
+    select distinct s.id as Bdika_Id, ist.filename as Image_Filename
+    from image i 
+    left join study s on s.id = i.study_uid 
+    left join patient p on p.id = s.patient_uid 
+    left join image_ws_view ist on ist.imageuid = i.id 
+    where ist.viewname = 'Original' 
+    and i.study_uid in ({accession_numbers_wc})
+
+  insert_hds: Fact_Imaging_Onc_Banzat_Id_Images_Parallel
+
+etl:
+  chunk_size: 1000
+  max_workers: 8  # New: Number of parallel processes
